@@ -1,0 +1,190 @@
+---
+title: "ST558: Homework 4"
+authors: "Scott Van Slyck"
+description: "Advanced functions in R and querying an API"
+date: "June 25, 2024"
+format: html
+editor: visual
+---
+
+```{r} 
+#| echo: FALSE
+
+library(tidyverse)
+```
+
+## Task 1: Conceptual Questions
+1. What is the purpose of the lapply() function? What is the equivalent purrr function?
+
+
+The lapply function applies a function to each element of a list and returns a list, the 'purrr' equivalent for this function is map().
+
+2. Suppose we have a list called my_list. Each element of the list is a numeric data frame (all columns
+are numeric). We want use lapply() to run the code cor(numeric_matrix, method = "kendall")
+on each element of the list. Write code to do this below! (I’m really trying to ask you how you specify
+method = "kendall" when calling lapply())
+
+lapply(my_list, FUN = cor, method = "kendall")
+
+
+3. What are two advantages of using purrr functions instead of the BaseR apply family?
+
+Firstly, 'purrr' functions like 'map()' provide consistent and easier to read syntax that integrates well with the rest of the tidyverse allowing code to be easier to understand. Secondly, 'purrr' offers type-specific functions like 'map_dbl()' and others to ensure the output is the desired type.
+
+4. What is a side-effect function?
+
+A side-effect function is a function that performs actions other than returning a value such as printing output, writing to a file, or interacting with an external system. They are called side-effects because they affect the program's state other than just producing a value or variable.
+
+
+5. Why can you name a variable sd in a function and not cause any issues with the sd function?
+
+Naming a variable 'sd' inside a function in R is safe because it remains local to the function and has a distinction different than the global sd() function. This variable would only run while the function is running.
+
+
+## Task 2: Writing R functions
+1. getRMSE function
+
+```{r}
+getRMSE <- function(response, prediction, ...){
+  RMSE = sqrt(mean((response - prediction)^2, ...))
+  return(RMSE = RMSE)
+}
+
+```
+
+2. Testing RMSE function
+```{r}
+set.seed(10)
+n <- 100
+x <- runif(n)
+resp <- 3 + 10*x + rnorm(n)
+pred <- predict(lm(resp ~ x), data.frame(x))
+
+getRMSE(resp, pred)
+
+resp[c(1,2)] = NA_real_
+getRMSE(resp, pred)
+
+getRMSE(resp, pred, na.rm = TRUE)
+
+```
+
+3/4. MAE function
+
+```{r}
+getMAE <- function(response, prediction, ...){
+  MAE = mean(abs(response - prediction), ...)
+  return(MAE = MAE)
+}
+
+set.seed(10)
+n <- 100
+x <- runif(n)
+resp <- 3 + 10*x + rnorm(n)
+pred <- predict(lm(resp ~ x), data.frame(x))
+
+getMAE(resp, pred)
+
+resp[c(1,2)] = NA_real_
+getMAE(resp, pred)
+
+getMAE(resp, pred, na.rm = TRUE)
+
+```
+
+5/6. Wrapper function/Test
+```{r}
+metrics <- function(response, prediction, metrics = c("RMSE", "MAE"), ...){
+  if(!(is.vector(response) & is.atomic(response) & is.numeric(response))){
+  stop("response vector is not numeric.")
+  }
+  if(!(is.vector(prediction) & is.atomic(prediction) & is.numeric(prediction))){
+  stop("prediction vector is not numeric.")
+}
+
+  results = list()
+  
+  if("RMSE" %in% metrics){
+    results$RMSE = getRMSE(response, prediction)
+  }
+  
+  if("MAE" %in% metrics){
+    results$MAE = getMAE(response, prediction)
+  }
+  
+  return(results)
+}
+
+set.seed(10)
+n <- 100
+x <- runif(n)
+resp <- 3 + 10*x + rnorm(n)
+pred <- predict(lm(resp ~ x), data.frame(x))
+
+
+metrics(resp, pred)
+
+metrics(resp, pred, metrics = "RMSE")
+
+metrics(resp, pred, metrics = "MAE")
+
+
+resp[c(1,2)] = NA_real_
+metrics(resp, pred)
+
+metrics(resp, pred, metrics = "RMSE")
+
+metrics(resp, pred, metrics = "MAE")
+
+
+metrics(resp, pred, na.rm = TRUE)
+
+metrics(resp, pred, metrics = "RMSE", na.rm = TRUE)
+
+metrics(resp, pred, metrics = "MAE", na.rm = TRUE)
+
+# metrics(resp, iris) presents error and does not allow me to run quarto render
+
+```
+
+## Task 3: API and Tidy-style function
+
+1. news API reading
+```{r}
+library(httr)
+dat = GET("https://newsapi.org/v2/top-headlines?sources=techcrunch&apiKey=dd989a70d3e549a08e899b8bee8c3707")
+```
+
+
+2. Parsing and finding data frame
+```{r}
+library(jsonlite)
+
+parsed = dat$content |>
+  rawToChar() |>
+  fromJSON()
+str(parsed, max.level = 1)
+
+parsed$articles |>
+  as_tibble()
+```
+
+3. Function to query the API
+```{r}
+news_pull <- function(title, from_date, api_key){
+  url = "https://newsapi.org/v2/everything"
+  params = list(
+    q = title,
+    from = from_date,
+    sortBy = "publishedAt",
+    apiKey = api_key
+  )
+  
+  response = GET(url, query = params)
+  
+  content = content(response, "text")
+  json_content = fromJSON(content, flatten = TRUE)
+  
+  return(json_content)
+}
+```
